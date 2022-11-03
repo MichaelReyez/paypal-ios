@@ -18,20 +18,28 @@ struct ConfirmPaymentSourceRequest: APIRequest {
         accessToken: String,
         cardRequest: CardRequest
     ) throws {
+        var confirmPaymentSourceBody = ConfirmPaymentSourceBody()
         var card = cardRequest.card
         if let threeDSecureRequest = cardRequest.threeDSecureRequest {
             let verification = Verification(method: threeDSecureRequest.sca.rawValue)
             card.attributes = Attributes(verification: verification)
+            
+            let applicationContext = ApplicationContext(
+                returnUrl: threeDSecureRequest.returnUrl,
+                cancelUrl: threeDSecureRequest.cancelUrl
+            )
+            confirmPaymentSourceBody.applicationContext = applicationContext
         }
-        let paymentSource = [ "payment_source": [ "card": card ] ]
-
+        
+        confirmPaymentSourceBody.paymentSource = PaymentSource(card: card)
+        
         self.orderID = cardRequest.orderID
         self.accessToken = accessToken
 
         path = String(format: pathFormat, orderID)
 
         jsonEncoder.keyEncodingStrategy = .convertToSnakeCase
-        body = try jsonEncoder.encode(paymentSource)
+        body = try jsonEncoder.encode(confirmPaymentSourceBody)
         
         // TODO - The complexity in this `init` signals to reconsider our use/design of the `APIRequest` protocol.
         // Existing pattern doesn't provide clear, testable interface for encoding JSON POST bodies.
@@ -50,5 +58,22 @@ struct ConfirmPaymentSourceRequest: APIRequest {
             .contentType: "application/json", .acceptLanguage: "en_US",
             .authorization: "Bearer \(accessToken)"
         ]
+    }
+    
+    private struct ConfirmPaymentSourceBody: Encodable {
+        
+        var paymentSource: PaymentSource?
+        var applicationContext: ApplicationContext?
+    }
+    
+    private struct ApplicationContext: Encodable {
+        
+        let returnUrl: String
+        let cancelUrl: String
+    }
+    
+    private struct PaymentSource: Encodable {
+        
+        let card: Card
     }
 }
