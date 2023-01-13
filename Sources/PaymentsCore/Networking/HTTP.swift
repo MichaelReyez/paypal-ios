@@ -5,11 +5,13 @@ class HTTP {
     
     let coreConfig: CoreConfig
     private var urlSession: URLSessionProtocol
-    private let decoder = APIClientDecoder()
+    private let jsonDecoder = JSONDecoder()
 
     init(urlSession: URLSessionProtocol = URLSession.shared, coreConfig: CoreConfig) {
         self.urlSession = urlSession
         self.coreConfig = coreConfig
+        
+        jsonDecoder.keyDecodingStrategy = .convertFromSnakeCase
     }
     
     func performRequest<T: APIRequest>(_ request: T) async throws -> (T.ResponseType) {
@@ -24,10 +26,18 @@ class HTTP {
 
         switch response.statusCode {
         case 200..<300:
-            let decodedData = try decoder.decode(T.self, from: data)
-            return (decodedData)
+            do {
+                return try jsonDecoder.decode(T.ResponseType.self, from: data)
+            } catch {
+                throw APIClientError.dataParsingError
+            }
         default:
-            let errorData = try decoder.decode(from: data)
+            let errorData: ErrorResponse
+            do {
+                errorData = try jsonDecoder.decode(ErrorResponse.self, from: data)
+            } catch {
+                throw APIClientError.unknownError
+            }
             throw APIClientError.serverResponseError(errorData.readableDescription)
         }
     }
